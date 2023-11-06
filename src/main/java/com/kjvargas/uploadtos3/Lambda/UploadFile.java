@@ -6,6 +6,7 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+
 import com.kjvargas.uploadtos3.ApiResponse.ApiResponse;
 import org.apache.commons.fileupload.MultipartStream;
 import org.json.simple.JSONObject;
@@ -23,7 +24,7 @@ public class UploadFile implements RequestHandler<Map<String, Object>, ApiRespon
     public ApiResponse handleRequest(Map<String, Object> input, Context context) {
 
         Regions clientRegion = Regions.DEFAULT_REGION;
-        String bucketName = "name bucket";
+        String bucketName = "nombre bucker";
 
         String fileObjKeyName = "";
 
@@ -36,7 +37,6 @@ public class UploadFile implements RequestHandler<Map<String, Object>, ApiRespon
         try {
             byte[] bytes = Base64.getDecoder().decode(input.get("body").toString().getBytes());
             Map<String, String> requesHeader = (Map<String, String>) input.get("headers");
-
             if (requesHeader != null) {
                 contentType = requesHeader.get("Content-Type");
             }
@@ -48,19 +48,30 @@ public class UploadFile implements RequestHandler<Map<String, Object>, ApiRespon
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             boolean nextPart = multipartStream.skipPreamble();
-
             while (nextPart) {
                 String header = multipartStream.readHeaders();
+                if (header != null) {
+                    String[] headerLines = header.split("\n");
+                    for (String line : headerLines) {
+                        if (line.toLowerCase().contains("content-type")) {
+                            int colonIndex = line.indexOf(":");
+                            if (colonIndex != -1) {
+                                contentType = line.substring(colonIndex + 1).trim();
+                                System.out.println("Content-TypeM: " + contentType);
+                            }
+                        }
+                    }
+                }
                 fileObjKeyName = getFileName(header, "filename");
                 multipartStream.readBodyData(out);
                 nextPart = multipartStream.readBoundary();
             }
             InputStream filesInputStream = new ByteArrayInputStream(out.toByteArray());
-
             AmazonS3 s3Client = AmazonS3ClientBuilder.standard().withRegion(clientRegion).build();
 
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentLength(out.toByteArray().length);
+            metadata.setContentType(contentType);
 
             s3Client.putObject(bucketName, fileObjKeyName, filesInputStream, metadata);
 
@@ -81,6 +92,7 @@ public class UploadFile implements RequestHandler<Map<String, Object>, ApiRespon
     private String getFileName(String str, String field) {
         String result = "";
         int index = str.indexOf(field);
+
         if (index >= 0) {
             int first = str.indexOf("\"", index);
             int second = str.indexOf("\"", first + 1);
